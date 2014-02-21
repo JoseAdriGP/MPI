@@ -1,0 +1,106 @@
+#include <iostream>
+#include "mpi.h"
+#include <time.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <vector>
+#include <cstring>
+
+using namespace std;
+
+void Filosofo(int id, int nprocesos){
+	int izq=(id+1)%nprocesos;
+	int der=(id-1+nprocesos)%nprocesos;
+	int ran = (rand()%5)*2; //El filosofo con id=ran será el que coja los palillos al revés
+	int t=0;
+
+	//Nombres para los filosofos
+	vector<string> names;
+	names.push_back("Confucio");
+	names.push_back("Zhuangzi");
+	names.push_back("Lao-Tsé");
+	names.push_back("Han Fei");
+	names.push_back("Mozi");
+
+	while(1){
+		if(id == ran){
+			//Solicita palillo derecho
+			cout << names.at(id/2) << " solicita su palillo derecho (" << der << ")." << endl << flush;
+			MPI_Ssend(&t, 1, MPI_INT, der, 0, MPI_COMM_WORLD);
+			cout << names.at(id/2) << " coge su palillo derecho (" << der << ")." << endl << flush;
+			
+			//Solicita palillo izquierdo
+			cout << names.at(id/2) << " solicita su palillo izquierdo (" << izq << ")." << endl << flush;
+			MPI_Ssend(&t, 1, MPI_INT, izq, 0, MPI_COMM_WORLD);
+			cout << names.at(id/2) << " coge su palillo izquierdo (" << izq << ")." << endl << flush;
+		}else{
+			//Solicita palillo izquierdo
+			cout << names.at(id/2) << " solicita su palillo izquierdo (" << izq << ")." << endl << flush;
+			MPI_Ssend(&t, 1, MPI_INT, izq, 0, MPI_COMM_WORLD);
+			cout << names.at(id/2) << " coge su palillo izquierdo (" << izq << ")." << endl << flush;
+			
+			//Solicita palillo derecho
+			cout << names.at(id/2) << " solicita su palillo derecho (" << der << ")." << endl << flush;
+			MPI_Ssend(&t, 1, MPI_INT, der, 0, MPI_COMM_WORLD);
+			cout << "Filosofo " << id << " coge su palillo derecho (" << der << ")." << endl << flush;
+		}
+		
+		//comiendo
+		cout << names.at(id/2) << " está COMIENDO" << endl << flush;
+		sleep((rand() % 3)+1); 
+		
+		//suelta el palillo izquierdo
+		MPI_Send(&t, 1, MPI_INT, izq, 0, MPI_COMM_WORLD);		
+		cout << names.at(id/2) << " suelta su palillo izquierdo (" << izq << ")." << endl << flush;
+		
+		//suelta el palillo derecho
+		MPI_Send(&t, 1, MPI_INT, der, 0, MPI_COMM_WORLD);
+		cout << names.at(id/2) << " suelta su palillo derecho (" << der << ")." << endl << flush;
+		
+		//pensando
+		cout << names.at(id/2) << " PENSANDO" << endl << flush;
+		sleep((rand()%3)+1 );
+	}
+}
+
+void Palillo(int id, int nprocesos){
+	int buf; 
+	MPI_Status status; 
+	int Filo;
+	
+	while(1){
+		// Espera un peticion desde cualquier filosofo vecino ...
+		MPI_Recv(&buf, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status );
+		
+		cout << "Palillo" << id << " recibe petic. de " << status.MPI_SOURCE << endl << flush;
+		
+		// Espera a que el filosofo suelte el palillo...
+		MPI_Recv(&buf, 1, MPI_INT, status.MPI_SOURCE, 0, MPI_COMM_WORLD, &status );	
+		
+		cout << "Palillo " << id << " recibe liberac. de " << status.MPI_SOURCE << endl << flush;
+	}
+}
+
+
+
+int main(int argc,char** argv ){
+	int rank,size;
+	srand(time(0));
+	MPI_Init( &argc, &argv );
+	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
+	MPI_Comm_size( MPI_COMM_WORLD, &size );
+	
+	if( size!=10){
+		if (rank == 0) 
+			cout<<"El numero de procesos debe ser 10"<<endl<<flush;
+		MPI_Finalize( );
+		return 0;
+	}
+
+	if ((rank%2) == 0) 
+		Filosofo(rank,size); 	// Los pares son Filosofos
+	else 
+		Palillo(rank,size);		// Los impares son Palillos
+	MPI_Finalize();
+	return 0;
+}
